@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 export async function POST(request: NextRequest) {
   try {
-    const { apiKey, systemPrompt, userMessage } = await request.json();
+    const { apiKey, model, systemPrompt, userMessage } = await request.json();
 
     if (!apiKey || typeof apiKey !== "string" || apiKey.trim() === "") {
       return NextResponse.json({ error: "No API key provided" }, { status: 400 });
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const client = new Anthropic({ apiKey: apiKey.trim() });
 
     const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model: typeof model === "string" && model.trim() ? model.trim() : "claude-sonnet-4-6",
       max_tokens: 1000,
       system: systemPrompt ?? "",
       messages: [{ role: "user", content: userMessage ?? "" }],

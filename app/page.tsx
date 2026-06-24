@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { parseSRT } from "@/lib/parseSRT";
 
 const tasks = [
   {
@@ -66,11 +67,13 @@ Be objective, cite specific transcript excerpts when flagging issues, and distin
 
 export default function Home() {
   const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState("claude-sonnet-4-6");
   const [activeTask, setActiveTask] = useState(tasks[0].id);
   const [userMessage, setUserMessage] = useState("");
   const [output, setOutput] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
 
   const task = tasks.find((t) => t.id === activeTask)!;
   const hasKey = apiKey.trim().length > 0;
@@ -80,6 +83,7 @@ export default function Home() {
     setUserMessage("");
     setOutput(null);
     setError(null);
+    setFilePreview(null);
   }
 
   async function handleRun() {
@@ -94,6 +98,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           apiKey,
+          model,
           systemPrompt: task.systemPrompt,
           userMessage,
         }),
@@ -116,19 +121,35 @@ export default function Home() {
   return (
     <div className="max-w-3xl mx-auto px-8 py-8 space-y-5">
 
-      {/* API key input */}
-      <div className="space-y-1.5">
-        <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider">
-          Anthropic API Key
-        </label>
-        <input
-          type="password"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          placeholder="sk-ant-..."
-          className="w-full bg-[#0d1117] border border-slate-800 rounded px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-slate-600 transition-colors"
-        />
-        <p className="text-xs text-slate-600">Key is never stored or logged</p>
+      {/* API key + model selector row */}
+      <div className="flex gap-3 items-end">
+        <div className="flex-1 space-y-1.5">
+          <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider">
+            Anthropic API Key
+          </label>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="sk-ant-..."
+            className="w-full bg-[#0d1117] border border-slate-800 rounded px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-slate-600 transition-colors"
+          />
+          <p className="text-xs text-slate-600">Key is never stored or logged</p>
+        </div>
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider">
+            Model
+          </label>
+          <select
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            className="bg-[#0d1117] border border-slate-800 rounded px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-slate-600 transition-colors cursor-pointer"
+          >
+            <option value="claude-sonnet-4-6">Sonnet 4.6 — Recommended</option>
+            <option value="claude-opus-4-8">Opus 4.8 — Slower, smarter</option>
+            <option value="claude-haiku-4-5">Haiku 4.5 — Fast, cheap</option>
+          </select>
+        </div>
       </div>
 
       {/* Task selector */}
@@ -171,7 +192,7 @@ export default function Home() {
           <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider">
             Attachment{" "}
             <span className="text-slate-600 normal-case tracking-normal font-normal">
-              — optional .txt
+              — optional .txt or .srt
             </span>
           </label>
           <label className="inline-flex items-center gap-2.5 px-4 py-2 bg-[#0d1117] border border-dashed border-slate-800 rounded cursor-pointer hover:border-slate-600 hover:text-slate-300 transition-colors group">
@@ -193,20 +214,36 @@ export default function Home() {
             </span>
             <input
               type="file"
-              accept=".txt"
+              accept=".txt,.srt"
               className="sr-only"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (ev) =>
+                reader.onload = (ev) => {
+                  const raw = String(ev.target?.result ?? "");
+                  const cleaned = parseSRT(raw);
                   setUserMessage((prev) =>
-                    prev ? prev + "\n\n" + ev.target?.result : String(ev.target?.result ?? "")
+                    prev ? prev + "\n\n" + cleaned : cleaned
                   );
+                  const previewLines = cleaned
+                    .split("\n")
+                    .filter((l) => l.trim())
+                    .slice(0, 3);
+                  setFilePreview(previewLines.join("\n"));
+                };
                 reader.readAsText(file);
               }}
             />
           </label>
+          {filePreview && (
+            <div className="mt-1 px-3 py-2 bg-[#0d1117] border border-slate-800 rounded text-xs text-slate-500 font-mono leading-relaxed">
+              <span className="text-slate-600 not-italic">Preview: </span>
+              {filePreview.split("\n").map((line, i) => (
+                <span key={i} className="block truncate">{line}</span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Run */}
