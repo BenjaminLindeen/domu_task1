@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { parseSRT } from "@/lib/parseSRT";
 
 const tasks = [
@@ -10,9 +11,16 @@ const tasks = [
     inputLabel: "Call transcript or scenario",
     placeholder:
       "Paste a call transcript or describe the voicebot scenario to convert into an agent prompt...",
+    fileSlug: "agent-prompt",
     systemPrompt: `You are an expert conversational AI designer specializing in voicebot and IVR scripts.
 Your job is to take call transcripts or scenario descriptions and convert them into clean, structured agent prompts suitable for a voice AI system.
-Output a well-organized agent prompt with clearly labeled sections: [GREETING], [INTENT CAPTURE], [RESOLUTION FLOW], [HOLD], [RESOLUTION], and [CLOSE].
+Always respond in clean markdown format using:
+- # for the main title
+- ## for each section header
+- **bold** for labels and key terms
+- Horizontal rules (---) between major sections
+- Proper blank lines between sections for readability
+Output a well-organized agent prompt with clearly labeled sections: GREETING, INTENT CAPTURE, RESOLUTION FLOW, HOLD, RESOLUTION, and CLOSE.
 Use {{placeholder}} syntax for dynamic values. Be concise, natural-sounding, and professional.
 Always include a clear escalation path to a human agent.`,
   },
@@ -22,15 +30,16 @@ Always include a clear escalation path to a human agent.`,
     inputLabel: "Issue description",
     placeholder:
       "Describe the bug, feature request, or technical issue to convert into a structured ticket...",
+    fileSlug: "engineering-ticket",
     systemPrompt: `You are a senior software engineering lead who writes precise, actionable engineering tickets.
+Always respond in clean markdown format using:
+- # for the ticket title
+- ## for each section header
+- **bold** for labels and field names
+- Horizontal rules (---) between major sections
+- Proper blank lines between sections for readability
 Convert the provided issue description into a structured engineering ticket with the following sections:
-- Title (concise, action-oriented)
-- Priority (Critical/High/Medium/Low) with brief justification
-- Estimate (story points: 1, 2, 3, 5, 8, 13)
-- Description (clear problem statement)
-- Acceptance Criteria (bulleted checklist, measurable outcomes)
-- Out of Scope (what this ticket explicitly does NOT cover)
-- Dependencies (any blockers or related systems)
+Title, Priority, Estimate, Description, Acceptance Criteria, Out of Scope, Dependencies.
 Be specific, avoid vague language, and write acceptance criteria a developer can test against.`,
   },
   {
@@ -39,12 +48,16 @@ Be specific, avoid vague language, and write acceptance criteria a developer can
     inputLabel: "Compliance requirement or policy area",
     placeholder:
       "Describe the compliance requirement, regulation, or policy area to draft guidance for...",
+    fileSlug: "compliance-draft",
     systemPrompt: `You are a compliance analyst drafting internal policy guidance documents.
+Always respond in clean markdown format using:
+- # for the main document title
+- ## for each section header
+- **bold** for labels and key terms
+- Horizontal rules (---) between major sections
+- Proper blank lines between sections for readability
 Convert the provided compliance requirement or policy area into a structured compliance draft with the following sections:
-1. SCOPE
-2. APPLICABLE REGULATIONS (cite specific articles/sections where possible)
-3. IDENTIFIED RISK AREAS
-4. RECOMMENDED CONTROLS
+Scope, Applicable Regulations, Identified Risk Areas, Recommended Controls.
 Always include a prominent disclaimer that this is an AI-generated draft requiring review by a qualified compliance officer or legal counsel before use.
 Be thorough but practical — focus on actionable controls, not just theoretical risks.`,
   },
@@ -54,43 +67,76 @@ Be thorough but practical — focus on actionable controls, not just theoretical
     inputLabel: "Call transcript",
     placeholder:
       "Paste the call transcript to review for quality and compliance flags...",
+    fileSlug: "flag-call-review",
     systemPrompt: `You are a quality assurance analyst reviewing call center transcripts for compliance and quality issues.
+Always respond in clean markdown format using:
+- # for the main review title
+- ## for each section header
+- **bold** for labels and key terms
+- Horizontal rules (---) between major sections
+- Proper blank lines between sections for readability
 Analyze the provided call transcript and produce a structured review with the following sections:
-- OVERALL SCORE (1-10 with brief rationale)
-- COMPLIANCE FLAGS (any regulatory, legal, or policy violations — cite specific issues)
-- QUALITY FLAGS (tone, professionalism, accuracy, resolution effectiveness)
-- POSITIVE OBSERVATIONS (what was done well)
-- RECOMMENDED ACTIONS (specific coaching points or escalation recommendations)
+Overall Score, Compliance Flags, Quality Flags, Positive Observations, Recommended Actions.
 Be objective, cite specific transcript excerpts when flagging issues, and distinguish between critical compliance failures and quality improvement opportunities.`,
   },
 ];
+
+type TabState = {
+  userMessage: string;
+  output: string | null;
+  error: string | null;
+  filePreview: string | null;
+};
+
+const blankTab = (): TabState => ({
+  userMessage: "",
+  output: null,
+  error: null,
+  filePreview: null,
+});
 
 export default function Home() {
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("claude-sonnet-4-6");
   const [activeTask, setActiveTask] = useState(tasks[0].id);
-  const [userMessage, setUserMessage] = useState("");
-  const [output, setOutput] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [showOverwritePrompt, setShowOverwritePrompt] = useState(false);
+  const [tabStates, setTabStates] = useState<Record<string, TabState>>(
+    Object.fromEntries(tasks.map((t) => [t.id, blankTab()]))
+  );
 
   const task = tasks.find((t) => t.id === activeTask)!;
+  const tab = tabStates[activeTask];
   const hasKey = apiKey.trim().length > 0;
+
+  function updateTab(patch: Partial<TabState>) {
+    setTabStates((prev) => ({
+      ...prev,
+      [activeTask]: { ...prev[activeTask], ...patch },
+    }));
+  }
 
   function handleTaskSwitch(id: string) {
     setActiveTask(id);
-    setUserMessage("");
-    setOutput(null);
-    setError(null);
-    setFilePreview(null);
+    setShowOverwritePrompt(false);
   }
 
-  async function handleRun() {
-    if (!hasKey) return;
+  function downloadOutput(taskId: string, content: string) {
+    const slug = tasks.find((t) => t.id === taskId)?.fileSlug ?? taskId;
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+    const blob = new Blob([content], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slug}-${timestamp}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function executeRun() {
+    setShowOverwritePrompt(false);
     setLoading(true);
-    setOutput(null);
-    setError(null);
+    updateTab({ output: null, error: null });
 
     try {
       const res = await fetch("/api/claude", {
@@ -100,22 +146,31 @@ export default function Home() {
           apiKey,
           model,
           systemPrompt: task.systemPrompt,
-          userMessage,
+          userMessage: tab.userMessage,
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok || data.error) {
-        setError(data.error ?? "Request failed");
+        updateTab({ error: data.error ?? "Request failed" });
       } else {
-        setOutput(data.result);
+        updateTab({ output: data.result });
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Network error");
+      updateTab({ error: e instanceof Error ? e.message : "Network error" });
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleRun() {
+    if (!hasKey || loading) return;
+    if (tab.output) {
+      setShowOverwritePrompt(true);
+      return;
+    }
+    executeRun();
   }
 
   return (
@@ -180,8 +235,8 @@ export default function Home() {
           <textarea
             key={task.id}
             rows={10}
-            value={userMessage}
-            onChange={(e) => setUserMessage(e.target.value)}
+            value={tab.userMessage}
+            onChange={(e) => updateTab({ userMessage: e.target.value })}
             placeholder={task.placeholder}
             className="w-full bg-[#0d1117] border border-slate-800 rounded px-4 py-3 text-sm text-slate-200 placeholder:text-slate-600 resize-none focus:outline-none focus:border-slate-600 transition-colors"
           />
@@ -223,31 +278,53 @@ export default function Home() {
                 reader.onload = (ev) => {
                   const raw = String(ev.target?.result ?? "");
                   const cleaned = parseSRT(raw);
-                  setUserMessage((prev) =>
-                    prev ? prev + "\n\n" + cleaned : cleaned
-                  );
                   const previewLines = cleaned
                     .split("\n")
                     .filter((l) => l.trim())
                     .slice(0, 3);
-                  setFilePreview(previewLines.join("\n"));
+                  updateTab({
+                    userMessage: tab.userMessage ? tab.userMessage + "\n\n" + cleaned : cleaned,
+                    filePreview: previewLines.join("\n"),
+                  });
                 };
                 reader.readAsText(file);
               }}
             />
           </label>
-          {filePreview && (
+          {tab.filePreview && (
             <div className="mt-1 px-3 py-2 bg-[#0d1117] border border-slate-800 rounded text-xs text-slate-500 font-mono leading-relaxed">
               <span className="text-slate-600 not-italic">Preview: </span>
-              {filePreview.split("\n").map((line, i) => (
+              {tab.filePreview.split("\n").map((line, i) => (
                 <span key={i} className="block truncate">{line}</span>
               ))}
             </div>
           )}
         </div>
 
-        {/* Run */}
-        <div className="flex justify-end pt-1">
+        {/* Run / overwrite prompt */}
+        <div className="flex flex-col items-end gap-3 pt-1">
+          {showOverwritePrompt && (
+            <div className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-amber-950/40 border border-amber-800/40 rounded text-xs text-amber-300">
+              <span>You have existing output. Download it before replacing?</span>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => {
+                    downloadOutput(activeTask, tab.output!);
+                    executeRun();
+                  }}
+                  className="px-3 py-1.5 rounded border border-amber-700 bg-amber-900/40 hover:bg-amber-800/50 text-amber-200 transition-colors"
+                >
+                  Download &amp; Continue
+                </button>
+                <button
+                  onClick={() => executeRun()}
+                  className="px-3 py-1.5 rounded border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                >
+                  Discard &amp; Continue
+                </button>
+              </div>
+            </div>
+          )}
           <button
             onClick={handleRun}
             disabled={!hasKey || loading}
@@ -265,27 +342,71 @@ export default function Home() {
       {/* Output panel */}
       <div className="bg-[#111318] border border-white/[0.06] rounded-lg overflow-hidden">
 
-        {/* DRAFT banner — shown when output exists */}
-        {output && (
-          <div className="px-5 py-3 bg-red-950/50 border-b border-red-900/40">
+        {/* DRAFT banner + download button */}
+        {tab.output && (
+          <div className="px-5 py-3 bg-red-950/50 border-b border-red-900/40 flex items-center justify-between">
             <span className="text-red-400 text-xs font-semibold tracking-widest uppercase">
               DRAFT — Requires Human Review
             </span>
+            <button
+              onClick={() => downloadOutput(activeTask, tab.output!)}
+              className="flex items-center gap-1.5 px-3 py-1 text-xs text-slate-400 border border-slate-700 rounded hover:text-slate-200 hover:border-slate-500 transition-colors"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Download .md
+            </button>
           </div>
         )}
 
         {/* Error */}
-        {error && (
+        {tab.error && (
           <div className="px-5 py-3 bg-red-950/30 border-b border-red-900/30">
-            <span className="text-red-400 text-xs">{error}</span>
+            <span className="text-red-400 text-xs">{tab.error}</span>
           </div>
         )}
 
         {/* Content */}
-        {output ? (
-          <pre className="px-6 py-5 text-sm text-slate-200 whitespace-pre-wrap font-mono leading-relaxed">
-            {output}
-          </pre>
+        {tab.output ? (
+          <div className="px-6 py-5">
+            <ReactMarkdown
+              components={{
+                h1: ({ children }) => (
+                  <h1 className="text-xl font-bold text-slate-100 mb-4 mt-1">{children}</h1>
+                ),
+                h2: ({ children }) => (
+                  <h2 className="text-base font-semibold text-slate-200 mb-2 mt-5 pb-1 border-b border-slate-700">{children}</h2>
+                ),
+                h3: ({ children }) => (
+                  <h3 className="text-sm font-semibold text-slate-300 mb-1.5 mt-4">{children}</h3>
+                ),
+                p: ({ children }) => (
+                  <p className="text-sm text-slate-300 leading-relaxed mb-3">{children}</p>
+                ),
+                strong: ({ children }) => (
+                  <strong className="font-semibold text-slate-100">{children}</strong>
+                ),
+                ul: ({ children }) => (
+                  <ul className="list-disc list-inside text-sm text-slate-300 leading-relaxed mb-3 space-y-1 pl-2">{children}</ul>
+                ),
+                ol: ({ children }) => (
+                  <ol className="list-decimal list-inside text-sm text-slate-300 leading-relaxed mb-3 space-y-1 pl-2">{children}</ol>
+                ),
+                li: ({ children }) => (
+                  <li className="text-slate-300">{children}</li>
+                ),
+                hr: () => (
+                  <hr className="border-slate-700 my-5" />
+                ),
+                code: ({ children }) => (
+                  <code className="bg-slate-800 text-slate-300 rounded px-1 py-0.5 text-xs font-mono">{children}</code>
+                ),
+              }}
+            >
+              {tab.output}
+            </ReactMarkdown>
+          </div>
         ) : (
           <div className="flex items-center justify-center min-h-52 px-6">
             <p className="text-slate-700 text-sm">Output will appear here</p>
