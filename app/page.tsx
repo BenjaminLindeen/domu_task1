@@ -122,8 +122,8 @@ export default function Home() {
     <div className="max-w-3xl mx-auto px-8 py-8 space-y-5">
 
       {/* API key + model selector row */}
-      <div className="flex gap-3 items-end">
-        <div className="flex-1 space-y-1.5">
+      <div className="flex gap-3 items-top">
+        <div className="flex-[3] space-y-1.5">
           <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider">
             Anthropic API Key
           </label>
@@ -132,18 +132,18 @@ export default function Home() {
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="sk-ant-..."
-            className="w-full bg-[#0d1117] border border-slate-800 rounded px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-slate-600 transition-colors"
+            className="h-10 w-full bg-[#0d1117] border border-slate-800 rounded px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-slate-600 transition-colors"
           />
-          <p className="text-xs text-slate-600">Key is never stored or logged</p>
+          <p className="text-xs text-slate-600 mt-6">Key is never stored or logged</p>
         </div>
-        <div className="space-y-1.5">
+        <div className="flex-[2] space-y-1.5">
           <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider">
             Model
           </label>
           <select
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            className="bg-[#0d1117] border border-slate-800 rounded px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-slate-600 transition-colors cursor-pointer"
+            className="h-10 w-full bg-[#0d1117] border border-slate-800 rounded px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-slate-600 transition-colors cursor-pointer"
           >
             <option value="claude-sonnet-4-6">Sonnet 4.6 — Recommended</option>
             <option value="claude-opus-4-8">Opus 4.8 — Slower, smarter</option>
