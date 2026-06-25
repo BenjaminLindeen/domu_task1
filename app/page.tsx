@@ -134,7 +134,7 @@ export default function Home() {
             placeholder="sk-ant-..."
             className="h-10 w-full bg-[#0d1117] border border-slate-800 rounded px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-slate-600 transition-colors"
           />
-          <p className="text-xs text-slate-600 mt-6">Key is never stored or logged</p>
+          <p className="text-xs text-slate-600">Key is never stored or logged</p>
         </div>
         <div className="flex-[2] space-y-1.5">
           <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider">
